@@ -11,6 +11,7 @@ if str(APP_DIR) not in sys.path:
     sys.path.insert(0, str(APP_DIR))
 
 from analysis.compare_analyzer import compare_stocks
+from analysis.explain_score import explain_score
 from backtest import download_history, sma_crossover_backtest
 from data.multi_market import get_multiple_market_data
 from walk_forward import parse_strategy, walk_forward_backtest
@@ -26,7 +27,7 @@ with st.sidebar:
     ticker_text = st.text_input("銘柄コード", "7203.T, 6758.T, 8306.T")
     period = st.selectbox("株価を調べる期間", ["3mo", "6mo", "1y", "2y", "5y", "10y"], index=1)
     strategies_text = st.text_input("検証する方法", "10:30, 20:50, 50:200")
-    cash_note = st.info("ここでは実際のお金を動かしません。分析・検証・仮想運用用です。")
+    st.info("ここでは実際のお金を動かしません。分析・検証・仮想運用用です。")
 
 tickers = [item.strip().upper() for item in ticker_text.split(",") if item.strip()]
 try:
@@ -35,7 +36,7 @@ except ValueError as exc:
     st.error(str(exc))
     strategies = []
 
-analysis_tab, test_tab, terms_tab = st.tabs(["🔎 AI分析", "🧪 過去でテスト", "📚 用語"],)
+analysis_tab, test_tab, terms_tab = st.tabs(["🔎 AI分析", "🧪 過去でテスト", "📚 用語"])
 
 with analysis_tab:
     st.subheader("銘柄を比べる")
@@ -54,17 +55,37 @@ with analysis_tab:
                 for item in valid:
                     fundamentals = item.get("fundamentals", {})
                     technical = item.get("technical", {})
+                    score = explain_score(item)
                     table_rows.append(
                         {
                             "銘柄": item["ticker"],
                             "価格": item["price"],
                             "前日比(%)": item["change_percent"],
+                            "総合スコア": score["overall_score"],
+                            "評価": score["label"],
                             "PER": fundamentals.get("trailing_pe"),
                             "PBR": fundamentals.get("price_to_book"),
                             "RSI": technical.get("rsi_14"),
                         }
                     )
-                st.dataframe(pd.DataFrame(table_rows), use_container_width=True)
+                scores_df = pd.DataFrame(table_rows).sort_values("総合スコア", ascending=False)
+                st.dataframe(scores_df, use_container_width=True, hide_index=True)
+
+                st.subheader("なぜこの点数？")
+                st.caption("点数はAIの予言ではなく、取得できたデータを初心者向けに整理するための説明用スコアです。")
+                for item in valid:
+                    score = explain_score(item)
+                    with st.expander(f"{item['ticker']}：{score['overall_score']:.1f}点 — {score['label']}"):
+                        cols = st.columns(4)
+                        for column, (name, value) in zip(cols, score["components"].items()):
+                            column.metric(name, f"{value:.1f}")
+                        st.write("主な理由")
+                        for category, reasons in score["reasons"].items():
+                            st.markdown(f"**{category}**")
+                            for reason in reasons:
+                                st.write(f"- {reason}")
+                        st.caption(score["note"])
+
                 st.subheader("AIの比較")
                 with st.spinner("AIが比較しています…"):
                     st.write(compare_stocks(valid))
@@ -98,7 +119,7 @@ with test_tab:
             c2.metric("年率換算", f"{wf['out_of_sample_annualized_return_percent']:.2f}%")
             c3.metric("最大の下落", f"{wf['out_of_sample_max_drawdown_percent']:.2f}%")
             st.caption(f"同じテスト期間で『買ってそのまま持つ』場合: {wf['out_of_sample_buy_hold_return_percent']:.2f}%")
-            st.dataframe(pd.DataFrame(wf["periods"]), use_container_width=True)
+            st.dataframe(pd.DataFrame(wf["periods"]), use_container_width=True, hide_index=True)
         except Exception as exc:
             st.error(f"エラー: {exc}")
 
