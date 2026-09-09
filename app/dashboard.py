@@ -11,8 +11,9 @@ if str(APP_DIR) not in sys.path:
     sys.path.insert(0, str(APP_DIR))
 
 from analysis.compare_analyzer import compare_stocks
+from analysis.decision_framework import build_decision_framework
 from analysis.explain_score import explain_score
-from backtest import download_history, sma_crossover_backtest
+from backtest import download_history
 from data.multi_market import get_multiple_market_data
 from walk_forward import parse_strategy, walk_forward_backtest
 
@@ -52,10 +53,12 @@ with analysis_tab:
                     st.warning(f"{item['ticker']}: {item['error']}")
             if valid:
                 table_rows = []
+                scored = []
                 for item in valid:
                     fundamentals = item.get("fundamentals", {})
                     technical = item.get("technical", {})
                     score = explain_score(item)
+                    scored.append((item, score))
                     table_rows.append(
                         {
                             "銘柄": item["ticker"],
@@ -73,18 +76,27 @@ with analysis_tab:
 
                 st.subheader("なぜこの点数？")
                 st.caption("点数はAIの予言ではなく、取得できたデータを初心者向けに整理するための説明用スコアです。")
-                for item in valid:
-                    score = explain_score(item)
+                for item, score in scored:
+                    framework = build_decision_framework(score)
                     with st.expander(f"{item['ticker']}：{score['overall_score']:.1f}点 — {score['label']}"):
                         cols = st.columns(4)
                         for column, (name, value) in zip(cols, score["components"].items()):
                             column.metric(name, f"{value:.1f}")
-                        st.write("主な理由")
+
+                        st.markdown("**総合点の計算**")
+                        for key, contribution in framework["contributions"].items():
+                            label = framework["labels"][key]
+                            weight = framework["weights"][key] * 100
+                            score_value = framework["scores"][key]
+                            st.write(f"{label}: {score_value:.1f}点 × {weight:.0f}% → {contribution:.1f}点")
+                        st.write(f"**合計: {framework['total']:.1f}点**")
+
+                        st.write("**主な理由**")
                         for category, reasons in score["reasons"].items():
                             st.markdown(f"**{category}**")
                             for reason in reasons:
                                 st.write(f"- {reason}")
-                        st.caption(score["note"])
+                        st.caption(framework["note"])
 
                 st.subheader("AIの比較")
                 with st.spinner("AIが比較しています…"):
