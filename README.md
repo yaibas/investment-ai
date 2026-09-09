@@ -10,6 +10,7 @@ AI-assisted investment analysis project.
 - Run a historical SMA-crossover backtest with configurable trading friction
 - Manage a saved paper portfolio with virtual buy/sell transactions
 - Generate AI-based paper-portfolio allocation proposals with configurable cash and single-asset limits
+- Apply an allocation proposal to the saved paper portfolio through virtual rebalancing
 - Ask an LLM to rank attention candidates and explain risks
 - Analysis only: no real-money order execution
 
@@ -36,7 +37,7 @@ Copy `.env.example` to `.env`, then put your API key in `.env`:
 OPENAI_API_KEY=your_api_key_here
 ```
 
-Set `OPENAI_MODEL` to a model available to your API account. The code reads the value from `.env` rather than requiring a model name in source code.
+Set `OPENAI_MODEL` to a model available to your API account. The code reads the value from `.env` rather than requiring a model name in source code. OpenAI's current model catalog lists GPT-5.6 Luna as a cost-sensitive option available through the Responses API. citeturn720139search0
 
 ### 4. Run a multi-ticker analysis
 
@@ -62,39 +63,27 @@ python app\backtest.py 7203.T --period 5y
 
 The paper portfolio uses virtual transactions only. The state is saved in `paper_portfolio.json` by default.
 
-Create a virtual position:
-
 ```powershell
 python app\paper_portfolio.py --cash 1000000 --buy 7203.T 10 3000
-```
-
-Refresh the valuation using the latest downloaded price:
-
-```powershell
 python app\paper_portfolio.py --quote 7203.T
-```
-
-Sell virtually:
-
-```powershell
 python app\paper_portfolio.py --sell 7203.T 5 3200
 ```
 
 ### 7. Generate an AI allocation proposal
 
-This command analyzes the selected tickers and returns a research-only allocation proposal whose total is constrained to 100%, including the requested cash allocation and per-ticker maximum.
-
-```powershell
-python app\allocate.py 7203.T 6758.T 8306.T 9984.T
-```
-
-For example, keep 20% in cash and cap one ticker at 35%:
-
 ```powershell
 python app\allocate.py 7203.T 6758.T 8306.T 9984.T --cash 20 --max-weight 35
 ```
 
-The AI proposal is informational and is not an order or a guarantee of performance.
+### 8. Rebalance the paper portfolio from the AI proposal
+
+This command performs only virtual trades. It analyzes the selected tickers, obtains the AI target allocation, then moves the saved paper portfolio toward that target using downloaded prices.
+
+```powershell
+python app\rebalance.py 7203.T 6758.T 8306.T 9984.T
+```
+
+The saved portfolio is updated locally. No broker connection or real-money order is used.
 
 ### Japanese stock ticker examples
 
@@ -103,13 +92,17 @@ The AI proposal is informational and is not an order or a guarantee of performan
 - `8306.T` — Mitsubishi UFJ Financial Group
 - `9984.T` — SoftBank Group
 
+## Safety and scope
+
+This project is intended for research and paper-trading workflows. It does not place real orders. AI output is not a guarantee of future returns and should be validated with backtests and independent review.
+
 ## Output
 
-The analysis command prints market data, technical indicators, and an AI comparison with an attention ranking, reasons, and risks. The backtest command prints strategy return, buy-and-hold return, annualized return, maximum drawdown, win rate, and trading-event count. The paper portfolio prints cash, holdings, market value, unrealized P/L, and transaction count. The allocation command prints proposed weights, reasons, a summary, and key risks.
+The analysis command prints market data, technical indicators, and an AI comparison with an attention ranking, reasons, and risks. The backtest command prints strategy return, buy-and-hold return, annualized return, maximum drawdown, win rate, and trading-event count. The paper portfolio prints cash, holdings, market value, unrealized P/L, and transaction count. The allocation command prints proposed weights, reasons, a summary, and key risks. The rebalance command prints target weights, virtual trades, and the resulting portfolio.
 
 ## Roadmap
 
-1. Feed allocation proposals into the paper portfolio for simulated rebalancing
-2. More robust backtesting and strategy comparison
+1. Portfolio performance history and charts
+2. More robust backtesting with multiple strategies and walk-forward evaluation
 3. More asset classes
-4. Automated scheduled analysis
+4. Scheduled analysis
