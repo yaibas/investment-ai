@@ -7,6 +7,7 @@ AI-assisted investment analysis project.
 - Compare multiple tickers in one run
 - Calculate technical indicators such as SMA, EMA, RSI, MACD, and volatility
 - Include recent company fundamentals and news context when available
+- Show a simple, transparent beginner score with reasons for each component
 - Run a historical SMA-crossover backtest with configurable trading friction
 - Compare multiple SMA strategies across multiple tickers in one batch
 - Export batch backtest results to CSV
@@ -27,7 +28,9 @@ After installing dependencies, start the dashboard with:
 streamlit run app\dashboard.py
 ```
 
-The dashboard lets you enter ticker codes, run AI comparisons, test strategies on historical data, and open a built-in glossary for difficult terms.
+The dashboard lets you enter ticker codes, run AI comparisons, see a transparent explanation score, test strategies on historical data, and open a built-in glossary for difficult terms.
+
+The explanation score is deliberately simple and is not a prediction model. It summarizes four areas when data is available: technical signals, company financial figures, recent news availability, and recent price movement.
 
 ## Quick start (Windows)
 
@@ -126,7 +129,8 @@ History is stored in `portfolio_history.json` by default. Re-running `--record` 
 - **スリッページ**: 注文したい価格と、実際に成立すると仮定した価格のズレ。
 - **ウォークフォワード検証**: 過去だけで方法を選び、その後のまだ使っていないデータで検証すること。
 - **ペーパー運用**: 実際のお金を使わず、仮想のお金で運用を試すこと。
+- **総合スコア**: 複数の材料を同じ尺度にして見やすくした説明用の点数。将来の値上がりを保証するものではない。
 
 ## Safety and scope
 
-This project is intended for research and paper-trading workflows. It does not place real orders. AI output and historical backtests do not guarantee future performance.
+This project is intended for research and paper-trading workflows. It does not place real orders. AI output, explanation scores, and historical backtests do not guarantee future performance.
