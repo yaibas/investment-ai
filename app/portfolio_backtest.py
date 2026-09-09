@@ -27,9 +27,17 @@ def download_prices(tickers: list[str], period: str = "10y") -> pd.DataFrame:
     return close[cleaned].ffill().dropna()
 
 
-def portfolio_backtest(prices: pd.DataFrame, weights: dict[str, float], rebalance: str = "monthly", transaction_cost_bps: float = 10.0) -> dict[str, Any]:
+def portfolio_backtest(
+    prices: pd.DataFrame,
+    weights: dict[str, float],
+    rebalance: str = "monthly",
+    transaction_cost_bps: float = 10.0,
+    cash_weight_percent: float = 0.0,
+) -> dict[str, Any]:
     if transaction_cost_bps < 0:
         raise ValueError("transaction_cost_bps は0以上にしてください")
+    if not 0 <= cash_weight_percent < 100:
+        raise ValueError("cash_weight_percent は0〜100未満で指定してください")
     if not weights or any(float(v) < 0 for v in weights.values()):
         raise ValueError("ウェイトは0以上で指定してください")
     available = [ticker for ticker in weights if ticker in prices.columns]
@@ -39,7 +47,11 @@ def portfolio_backtest(prices: pd.DataFrame, weights: dict[str, float], rebalanc
     total = sum(raw.values())
     if total <= 0:
         raise ValueError("ウェイトの合計は0より大きくしてください")
-    target_weights = {ticker: value / total for ticker, value in raw.items()}
+
+    investable_fraction = 1.0 - cash_weight_percent / 100.0
+    normalized = {ticker: value / total for ticker, value in raw.items()}
+    target_weights = {ticker: value * investable_fraction for ticker, value in normalized.items()}
+
     returns = prices[list(target_weights)].pct_change().fillna(0.0)
     if rebalance == "daily":
         flags = pd.Series(True, index=returns.index)
@@ -48,6 +60,7 @@ def portfolio_backtest(prices: pd.DataFrame, weights: dict[str, float], rebalanc
         flags = pd.Series(periods != periods.shift(1), index=returns.index)
     else:
         raise ValueError("rebalance は daily または monthly にしてください")
+
     holdings = pd.Series(0.0, index=target_weights)
     strategy_returns: list[float] = []
     turnovers: list[float] = []
@@ -62,6 +75,7 @@ def portfolio_backtest(prices: pd.DataFrame, weights: dict[str, float], rebalanc
         cost = turnover * transaction_cost_bps / 10_000
         strategy_returns.append(gross - cost)
         turnovers.append(turnover)
+
     daily = pd.Series(strategy_returns, index=returns.index)
     equity = (1 + daily).cumprod()
     peak = equity.cummax()
@@ -74,6 +88,7 @@ def portfolio_backtest(prices: pd.DataFrame, weights: dict[str, float], rebalanc
         "start": equity.index[0].strftime("%Y-%m-%d"),
         "end": equity.index[-1].strftime("%Y-%m-%d"),
         "weights": target_weights,
+        "cash_weight_percent": round(cash_weight_percent, 2),
         "rebalance": rebalance,
         "total_return_percent": round(float(equity.iloc[-1] - 1) * 100, 2),
         "annualized_return_percent": round(float(annualized_return) * 100, 2),
@@ -100,15 +115,17 @@ def main() -> None:
     parser.add_argument("tickers", nargs="+", help="例: 7203.T 6758.T 8306.T")
     parser.add_argument("--period", default="10y")
     parser.add_argument("--weight", action="append", help="例: --weight 7203.T=40 --weight 6758.T=30")
+    parser.add_argument("--cash", type=float, default=0.0, help="現金比率（%）")
     parser.add_argument("--rebalance", choices=["daily", "monthly"], default="monthly")
     parser.add_argument("--cost-bps", type=float, default=10.0)
     args = parser.parse_args()
     prices = download_prices(args.tickers, args.period)
     weights = parse_weights(args.weight) if args.weight else {ticker: 1.0 for ticker in args.tickers}
-    result = portfolio_backtest(prices, weights, args.rebalance, args.cost_bps)
+    result = portfolio_backtest(prices, weights, args.rebalance, args.cost_bps, args.cash)
     print("===== ポートフォリオ・バックテスト =====")
     print(f"期間: {result['start']} ～ {result['end']}")
     print(f"配分: {result['weights']}")
+    print(f"現金: {result['cash_weight_percent']}%")
     print(f"累積リターン: {result['total_return_percent']}%")
     print(f"年率リターン: {result['annualized_return_percent']}%")
     print(f"値動きの大きさ: {result['annualized_volatility_percent']}%")
