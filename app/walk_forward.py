@@ -16,7 +16,7 @@ def walk_forward_backtest(
     transaction_cost_bps: float = 10.0,
     slippage_bps: float = 5.0,
 ) -> dict[str, Any]:
-    """Optimize on a past window, then test the selected strategy on the next unseen window."""
+    """Optimize on past data, then test the selected strategy on the next unseen window."""
     if train_days < 60:
         raise ValueError("train_days は60以上にしてください")
     if test_days < 20:
@@ -32,8 +32,8 @@ def walk_forward_backtest(
     while start + train_days + test_days <= len(clean):
         train = clean.iloc[start : start + train_days]
         test = clean.iloc[start + train_days : start + train_days + test_days]
-
         train_results = []
+
         for fast, slow in settings:
             try:
                 result = sma_crossover_backtest(
@@ -75,14 +75,17 @@ def walk_forward_backtest(
             }
         )
 
-        daily = test["Close"].pct_change().fillna(0)
-        fast_sma = test["Close"].rolling(fast).mean()
-        slow_sma = test["Close"].rolling(slow).mean()
+        # Calculate indicators using both train and test prices so the first test
+        # days do not lose the long-window SMA history from the training period.
+        combined_window = clean.iloc[start : start + train_days + test_days]
+        daily = combined_window["Close"].pct_change().fillna(0)
+        fast_sma = combined_window["Close"].rolling(fast).mean()
+        slow_sma = combined_window["Close"].rolling(slow).mean()
         position = (fast_sma > slow_sma).astype(float).shift(1).fillna(0)
         friction = (transaction_cost_bps + slippage_bps) / 10000
         turnover = position.diff().abs().fillna(position.abs())
         strategy_daily = daily * position - turnover * friction
-        oos_returns.append(strategy_daily)
+        oos_returns.append(strategy_daily.loc[test.index])
 
         start += test_days
 
@@ -95,7 +98,8 @@ def walk_forward_backtest(
     drawdown = equity / peak - 1.0
     days = max((equity.index[-1] - equity.index[0]).days, 1)
     annualized = equity.iloc[-1] ** (365 / days) - 1
-    buy_hold = (1 + clean.loc[combined.index, "Close"].pct_change().fillna(0)).prod() - 1
+    benchmark_daily = clean["Close"].pct_change().fillna(0).loc[combined.index]
+    buy_hold = (1 + benchmark_daily).prod() - 1
 
     return {
         "periods": periods,
@@ -111,7 +115,10 @@ def parse_strategy(value: str) -> tuple[int, int]:
     parts = value.split(":", 1)
     if len(parts) != 2:
         raise ValueError(f"戦略は fast:slow 形式で指定してください: {value}")
-    fast, slow = int(parts[0]), int(parts[1])
+    try:
+        fast, slow = int(parts[0]), int(parts[1])
+    except ValueError as exc:
+        raise ValueError(f"戦略は整数の fast:slow 形式で指定してください: {value}") from exc
     if fast < 2 or fast >= slow:
         raise ValueError(f"不正なSMA設定です: {value}")
     return fast, slow
