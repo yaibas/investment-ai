@@ -1,1 +1,0 @@
-The dashboard score is educational and transparent; it is not a forecast.
