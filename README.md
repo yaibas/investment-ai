@@ -8,6 +8,8 @@ AI-assisted investment analysis project.
 - Calculate technical indicators such as SMA, EMA, RSI, MACD, and volatility
 - Include recent company fundamentals and news context when available
 - Run a historical SMA-crossover backtest with configurable trading friction
+- Compare multiple SMA strategies across multiple tickers in one batch
+- Export batch backtest results to CSV
 - Manage a saved paper portfolio with virtual buy/sell transactions
 - Generate AI-based paper-portfolio allocation proposals with configurable cash and single-asset limits
 - Apply an allocation proposal to the saved paper portfolio through virtual rebalancing
@@ -46,13 +48,33 @@ Set `OPENAI_MODEL` to a model available to your API account. The code reads the 
 python app\run_analysis.py 7203.T 6758.T 9984.T 8306.T
 ```
 
-### 5. Run a backtest
+### 5. Run a single backtest
 
 ```powershell
 python app\backtest.py 7203.T --period 5y --fast 20 --slow 50
 ```
 
-### 6. Generate and apply an AI paper allocation
+### 6. Run a multi-ticker × multi-strategy backtest
+
+The batch command evaluates every requested SMA configuration against every ticker and ranks the results by annualized return.
+
+```powershell
+python app\batch_backtest.py 7203.T 6758.T 8306.T 9984.T --period 5y
+```
+
+Specify strategies explicitly:
+
+```powershell
+python app\batch_backtest.py 7203.T 6758.T 8306.T --period 10y --strategy 10:30 --strategy 20:50 --strategy 50:200
+```
+
+Export the same results to CSV:
+
+```powershell
+python app\batch_backtest.py 7203.T 6758.T 8306.T --csv backtest_results.csv
+```
+
+### 7. Generate and apply an AI paper allocation
 
 ```powershell
 python app\rebalance.py 7203.T 6758.T 8306.T 9984.T --cash 20 --max-weight 35
@@ -60,7 +82,7 @@ python app\rebalance.py 7203.T 6758.T 8306.T 9984.T --cash 20 --max-weight 35
 
 This analyzes the selected tickers, proposes constrained research weights, and applies them to `paper_portfolio.json` through virtual trades only.
 
-### 7. Record portfolio performance history
+### 8. Record portfolio performance history
 
 After a paper portfolio exists, record today's valuation:
 
