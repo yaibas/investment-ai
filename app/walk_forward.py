@@ -6,6 +6,7 @@ from typing import Any
 import pandas as pd
 
 from backtest import download_history, sma_crossover_backtest
+from risk_metrics import calculate_risk_metrics
 
 
 def walk_forward_backtest(
@@ -75,8 +76,6 @@ def walk_forward_backtest(
             }
         )
 
-        # Calculate indicators using both train and test prices so the first test
-        # days do not lose the long-window SMA history from the training period.
         combined_window = clean.iloc[start : start + train_days + test_days]
         daily = combined_window["Close"].pct_change().fillna(0)
         fast_sma = combined_window["Close"].rolling(fast).mean()
@@ -100,12 +99,16 @@ def walk_forward_backtest(
     annualized = equity.iloc[-1] ** (365 / days) - 1
     benchmark_daily = clean["Close"].pct_change().fillna(0).loc[combined.index]
     buy_hold = (1 + benchmark_daily).prod() - 1
+    risk = calculate_risk_metrics(combined)
 
     return {
         "periods": periods,
         "out_of_sample_return_percent": round((equity.iloc[-1] - 1) * 100, 2),
         "out_of_sample_annualized_return_percent": round(annualized * 100, 2),
         "out_of_sample_max_drawdown_percent": round(drawdown.min() * 100, 2),
+        "out_of_sample_annualized_volatility_percent": risk["annualized_volatility_percent"],
+        "out_of_sample_sharpe_ratio": risk["sharpe_ratio"],
+        "out_of_sample_sortino_ratio": risk["sortino_ratio"],
         "out_of_sample_buy_hold_return_percent": round(buy_hold * 100, 2),
         "period_count": len(periods),
     }
@@ -154,6 +157,9 @@ def main() -> None:
     print(f"未来期間の累積リターン: {result['out_of_sample_return_percent']:.2f}%")
     print(f"未来期間の年率リターン: {result['out_of_sample_annualized_return_percent']:.2f}%")
     print(f"未来期間の最大下落: {result['out_of_sample_max_drawdown_percent']:.2f}%")
+    print(f"値動きの大きさ: {result['out_of_sample_annualized_volatility_percent']:.2f}%")
+    print(f"シャープレシオ: {result['out_of_sample_sharpe_ratio']}")
+    print(f"ソルティノレシオ: {result['out_of_sample_sortino_ratio']}")
     print(f"同期間の買って持つだけ: {result['out_of_sample_buy_hold_return_percent']:.2f}%")
     print("\n期間ごとの選択")
     for period in result["periods"]:
