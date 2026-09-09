@@ -3,12 +3,15 @@ from __future__ import annotations
 import argparse
 from typing import Any
 
-import numpy as np
 import yfinance as yf
 
 
 def download_history(ticker: str, period: str = "5y"):
-    history = yf.Ticker(ticker.strip().upper()).history(
+    ticker = ticker.strip().upper()
+    if not ticker:
+        raise ValueError("ticker が空です")
+
+    history = yf.Ticker(ticker).history(
         period=period,
         interval="1d",
         auto_adjust=False,
@@ -27,7 +30,7 @@ def sma_crossover_backtest(
 
     Position is 1 when SMA(fast) > SMA(slow), otherwise 0.
     Signals are shifted by one day to avoid look-ahead bias.
-    No transaction costs or taxes are modeled yet.
+    Transaction costs and taxes are not modeled yet.
     """
     close = history["Close"].astype(float)
     frame = history.copy()
@@ -79,6 +82,8 @@ def main() -> None:
 
     if args.fast >= args.slow:
         raise ValueError("fast は slow より小さくしてください")
+    if args.fast < 2:
+        raise ValueError("fast は2以上にしてください")
 
     history = download_history(args.ticker, args.period)
     result = sma_crossover_backtest(history, args.fast, args.slow)
