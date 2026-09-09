@@ -10,12 +10,24 @@ AI-assisted investment analysis project.
 - Run a historical SMA-crossover backtest with configurable trading friction
 - Compare multiple SMA strategies across multiple tickers in one batch
 - Export batch backtest results to CSV
+- Run walk-forward validation so strategy selection is tested on later unseen periods
 - Manage a saved paper portfolio with virtual buy/sell transactions
 - Generate AI-based paper-portfolio allocation proposals with configurable cash and single-asset limits
 - Apply an allocation proposal to the saved paper portfolio through virtual rebalancing
 - Record paper-portfolio valuation history and calculate cumulative return and maximum drawdown
+- Provide a beginner-friendly Streamlit dashboard
 - Ask an LLM to rank attention candidates and explain risks
 - Analysis only: no real-money order execution
+
+## Beginner-friendly dashboard (Windows)
+
+After installing dependencies, start the dashboard with:
+
+```powershell
+streamlit run app\dashboard.py
+```
+
+The dashboard lets you enter ticker codes, run AI comparisons, test strategies on historical data, and open a built-in glossary for difficult terms.
 
 ## Quick start (Windows)
 
@@ -74,7 +86,15 @@ Export the same results to CSV:
 python app\batch_backtest.py 7203.T 6758.T 8306.T --csv backtest_results.csv
 ```
 
-### 7. Generate and apply an AI paper allocation
+### 7. Run a walk-forward validation
+
+This first chooses the better strategy from an older training period, then tests that choice on the following period that was not used for selection.
+
+```powershell
+python app\walk_forward.py 7203.T --period 10y
+```
+
+### 8. Generate and apply an AI paper allocation
 
 ```powershell
 python app\rebalance.py 7203.T 6758.T 8306.T 9984.T --cash 20 --max-weight 35
@@ -82,7 +102,7 @@ python app\rebalance.py 7203.T 6758.T 8306.T 9984.T --cash 20 --max-weight 35
 
 This analyzes the selected tickers, proposes constrained research weights, and applies them to `paper_portfolio.json` through virtual trades only.
 
-### 8. Record portfolio performance history
+### 9. Record portfolio performance history
 
 After a paper portfolio exists, record today's valuation:
 
@@ -97,6 +117,15 @@ python app\portfolio_history.py
 ```
 
 History is stored in `portfolio_history.json` by default. Re-running `--record` on the same day updates that day's snapshot instead of adding a duplicate.
+
+## Beginner glossary
+
+- **バックテスト**: 過去の株価を使って「この方法ならどうなったか」を試すこと。
+- **SMA**: 一定期間の株価の平均。たとえば 20日SMA は直近20日間の平均。
+- **最大ドローダウン**: 資産がピークからどれくらい大きく減ったか。
+- **スリッページ**: 注文したい価格と、実際に成立すると仮定した価格のズレ。
+- **ウォークフォワード検証**: 過去だけで方法を選び、その後のまだ使っていないデータで検証すること。
+- **ペーパー運用**: 実際のお金を使わず、仮想のお金で運用を試すこと。
 
 ## Safety and scope
 
