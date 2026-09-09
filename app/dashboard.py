@@ -10,6 +10,7 @@ APP_DIR = Path(__file__).resolve().parent
 if str(APP_DIR) not in sys.path:
     sys.path.insert(0, str(APP_DIR))
 
+from ai_portfolio_backtest import run_ai_allocation_historical_check
 from analysis.compare_analyzer import compare_stocks
 from analysis.explain_score import explain_score
 from backtest import download_history, sma_crossover_backtest
@@ -36,7 +37,9 @@ except ValueError as exc:
     st.error(str(exc))
     strategies = []
 
-analysis_tab, test_tab, terms_tab = st.tabs(["🔎 AI分析", "🧪 過去でテスト", "📚 用語"])
+analysis_tab, ai_portfolio_tab, test_tab, terms_tab = st.tabs(
+    ["🔎 AI分析", "🧠 AIポートフォリオ", "🧪 過去でテスト", "📚 用語"]
+)
 
 with analysis_tab:
     st.subheader("銘柄を比べる")
@@ -94,6 +97,72 @@ with analysis_tab:
     else:
         st.info("まず銘柄コードを確認して「分析を開始」を押してください。")
 
+with ai_portfolio_tab:
+    st.subheader("AIにポートフォリオを作ってもらう")
+    st.write("入力した候補銘柄をAIが比較し、『どれを何％持つか』を決め、その配分を過去の価格データで確認します。")
+    st.warning(
+        "これは現在のAI配分を過去価格に当てはめる『歴史的感度チェック』です。 "
+        "過去時点の情報だけでAIが判断した厳密なアウトオブサンプル検証ではありません。"
+    )
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        cash_weight = st.slider("現金比率（%）", 0, 50, 10, 5)
+    with col2:
+        max_weight = st.slider("1銘柄の上限（%）", 10, 100, 40, 5)
+    with col3:
+        rebalance = st.selectbox("再配分の頻度", ["monthly", "daily"], format_func=lambda x: "毎月" if x == "monthly" else "毎日")
+
+    if st.button("AI配分を作って過去検証", type="primary"):
+        if len(tickers) < 2:
+            st.error("2銘柄以上を入力してください。")
+        else:
+            try:
+                with st.spinner("現在のデータを集めてAIが配分を考えています…"):
+                    current_data = get_multiple_market_data(tickers, period=period, news_count=5)
+                    result = run_ai_allocation_historical_check(
+                        current_data,
+                        period="10y",
+                        cash_weight_percent=float(cash_weight),
+                        max_single_weight_percent=float(max_weight),
+                        rebalance=rebalance,
+                    )
+
+                allocation = result["allocation"]
+                backtest = result["backtest"]
+
+                st.subheader("AIが考えた配分")
+                allocation_rows = [
+                    {
+                        "銘柄": item["ticker"],
+                        "比率(%)": item["weight_percent"],
+                        "理由": item["reason"],
+                    }
+                    for item in allocation["portfolio"]
+                ]
+                allocation_rows.append({"銘柄": "現金", "比率(%)": allocation["cash_percent"], "理由": "価格変動に備えるための待機資金"})
+                st.dataframe(pd.DataFrame(allocation_rows), use_container_width=True, hide_index=True)
+                st.write(f"**AIの方針:** {allocation['summary']}")
+                if allocation["key_risks"]:
+                    st.write("**主なリスク**")
+                    for risk in allocation["key_risks"]:
+                        st.write(f"- {risk}")
+
+                st.subheader("過去10年の価格で確認")
+                c1, c2, c3 = st.columns(3)
+                c1.metric("累積リターン", f"{backtest['total_return_percent']:.2f}%")
+                c2.metric("年率リターン", f"{backtest['annualized_return_percent']:.2f}%")
+                c3.metric("最大下落", f"{backtest['max_drawdown_percent']:.2f}%")
+                c4, c5, c6 = st.columns(3)
+                c4.metric("値動きの大きさ", f"{backtest['annualized_volatility_percent']:.2f}%")
+                c5.metric("シャープレシオ", f"{backtest['sharpe_ratio']}")
+                c6.metric("ソルティノレシオ", f"{backtest['sortino_ratio']}")
+                st.caption(f"検証期間: {backtest['start']} ～ {backtest['end']} / 再配分: {'毎月' if rebalance == 'monthly' else '毎日'} / 現金: {backtest['cash_weight_percent']:.1f}%")
+                st.info(result["test_warning"])
+            except Exception as exc:
+                st.error(f"エラー: {exc}")
+    else:
+        st.info("候補銘柄を2つ以上入力して、AI配分の検証を開始してください。")
+
 with test_tab:
     st.subheader("過去の株価で試す")
     st.write("ここでは『この方法を昔から使っていたらどうなった？』を計算します。未来の利益を保証するものではありません。")
@@ -140,6 +209,7 @@ with terms_tab:
         ("ボラティリティ", "値動きの大きさ。大きいほど、成績がブレやすいと考える。"),
         ("シャープレシオ", "リスクに対してどれくらいリターンが出たかを見る目安。高いほど効率が良い傾向。"),
         ("ソルティノレシオ", "特に下落方向のブレを重く見て、成績の効率を確認する目安。"),
+        ("AIポートフォリオ検証", "AIが現在の候補銘柄から配分を考え、その配分を過去価格に当てはめて動きを確認すること。厳密な過去時点のAI判断を再現するものではない。"),
     ]
     for name, explanation in terms:
         with st.expander(name):
