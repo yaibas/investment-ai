@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 
 import pandas as pd
+import plotly.graph_objects as go
 import streamlit as st
 
 APP_DIR = Path(__file__).resolve().parent.parent
@@ -45,14 +46,23 @@ portfolio = load_game()
 with st.sidebar:
     st.subheader("銘柄")
     names = sorted(set(DISPLAY_NAMES.values()))
-    selected_name = st.selectbox("会社名", names, index=names.index("トヨタ自動車") if "トヨタ自動車" in names else 0)
+    selected_name = st.selectbox(
+        "会社名",
+        names,
+        index=names.index("トヨタ自動車") if "トヨタ自動車" in names else 0,
+    )
     ticker = resolve_ticker(selected_name)
 
     interval_label = st.selectbox("時間足", list(INTERVALS.keys()), index=0)
     interval = INTERVALS[interval_label]
     period_options = ["1d", "5d", "7d"] if interval == "1m" else ["1d", "5d", "30d", "60d"]
     period = st.selectbox("表示期間", period_options, index=0)
-    refresh_seconds = st.select_slider("自動更新", options=[5, 10, 15, 30, 60], value=10, format_func=lambda x: f"{x}秒ごと")
+    refresh_seconds = st.select_slider(
+        "自動更新",
+        options=[5, 10, 15, 30, 60],
+        value=10,
+        format_func=lambda x: f"{x}秒ごと",
+    )
 
     st.divider()
     st.metric("💎 ダイヤ", f"{portfolio.diamonds:,.0f}")
@@ -76,12 +86,57 @@ def show_market():
     c4.metric("出来高", f"{summary['volume']:,}")
 
     st.subheader(f"{display_name(ticker)} — {interval_label}")
-    chart_df = data[["Close", "EMA9", "EMA20"]].copy()
-    chart_df.columns = ["株価", "EMA9", "EMA20"]
-    st.line_chart(chart_df, height=430)
+    chart = go.Figure()
+    chart.add_trace(
+        go.Candlestick(
+            x=data.index,
+            open=data["Open"],
+            high=data["High"],
+            low=data["Low"],
+            close=data["Close"],
+            name="ローソク足",
+        )
+    )
+    chart.add_trace(
+        go.Scatter(
+            x=data.index,
+            y=data["EMA9"],
+            mode="lines",
+            name="EMA9",
+        )
+    )
+    chart.add_trace(
+        go.Scatter(
+            x=data.index,
+            y=data["EMA20"],
+            mode="lines",
+            name="EMA20",
+        )
+    )
+    chart.update_layout(
+        height=500,
+        margin=dict(l=10, r=10, t=30, b=10),
+        xaxis_rangeslider_visible=False,
+        hovermode="x unified",
+        yaxis_title="株価",
+        legend_title="指標",
+    )
+    st.plotly_chart(chart, use_container_width=True, config={"displaylogo": False})
 
-    volume_df = data[["Volume"]].rename(columns={"Volume": "出来高"})
-    st.bar_chart(volume_df, height=180)
+    volume_chart = go.Figure(
+        go.Bar(
+            x=data.index,
+            y=data["Volume"],
+            name="出来高",
+        )
+    )
+    volume_chart.update_layout(
+        height=220,
+        margin=dict(l=10, r=10, t=30, b=10),
+        hovermode="x unified",
+        yaxis_title="出来高",
+    )
+    st.plotly_chart(volume_chart, use_container_width=True, config={"displaylogo": False})
 
     latest = data.iloc[-1]
     rsi = latest.get("RSI14")
@@ -95,7 +150,7 @@ def show_market():
     st.caption(f"最新データ時刻: {summary['timestamp']}")
 
     st.info(
-        "この画面は仮想売買の練習用です。ローソク足ではなく価格ラインを表示しています。"
+        "この画面は仮想売買の練習用です。ローソク足チャートで価格の値動きを表示しています。"
         "自動売買や実際の注文は行いません。"
     )
 
@@ -167,7 +222,18 @@ with sell_col:
 
 st.subheader("保有状況")
 if live["holdings"]:
-    st.dataframe(pd.DataFrame(live["holdings"]), use_container_width=True, hide_index=True)
+    holdings_df = pd.DataFrame(live["holdings"]).rename(
+        columns={
+            "ticker": "銘柄コード",
+            "name": "銘柄名",
+            "shares": "保有株数",
+            "avg_price": "平均取得価格",
+            "price": "現在価格",
+            "market_value": "評価額",
+            "unrealized_pnl": "含み損益",
+        }
+    )
+    st.dataframe(holdings_df, use_container_width=True, hide_index=True)
 else:
     st.info("まだ株を保有していません。")
 
