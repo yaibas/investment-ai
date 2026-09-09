@@ -5,6 +5,9 @@ AI-assisted investment analysis project.
 ## Current scope
 - Fetch real market data with `yfinance`
 - Compare multiple tickers in one run
+- Calculate technical indicators such as SMA, EMA, RSI, MACD, and volatility
+- Include recent company fundamentals and news context when available
+- Run a historical SMA-crossover backtest
 - Ask an LLM to rank attention candidates and explain risks
 - Analysis only: no real-money order execution
 
@@ -31,11 +34,7 @@ Copy `.env.example` to `.env`, then put your API key in `.env`:
 OPENAI_API_KEY=your_api_key_here
 ```
 
-You can optionally choose the model with:
-
-```env
-OPENAI_MODEL=gpt-5.6
-```
+Set `OPENAI_MODEL` to a model available to your API account. The code reads the value from `.env` rather than requiring a model name in source code.
 
 ### 4. Run a multi-ticker analysis
 
@@ -43,10 +42,24 @@ OPENAI_MODEL=gpt-5.6
 python app\run_analysis.py 7203.T 6758.T 9984.T 8306.T
 ```
 
-Change the tickers to the companies or ETFs you want to analyze. You can also change the history window:
+You can change the tickers and history window:
 
 ```powershell
 python app\run_analysis.py 7203.T 6758.T --period 3mo
+```
+
+### 5. Run a backtest
+
+The current backtest is a simple long-only SMA crossover strategy. It is for historical research only; transaction costs, taxes, slippage, and other real-world effects are not modeled yet.
+
+```powershell
+python app\backtest.py 7203.T --period 5y
+```
+
+You can change the fast and slow moving-average windows:
+
+```powershell
+python app\backtest.py 7203.T --period 10y --fast 20 --slow 50
 ```
 
 ### Japanese stock ticker examples
@@ -58,12 +71,11 @@ python app\run_analysis.py 7203.T 6758.T --period 3mo
 
 ## Output
 
-The program prints the latest market data for each ticker and then an AI comparison with an attention ranking, reasons, and risks.
+The analysis command prints market data, technical indicators, and an AI comparison with an attention ranking, reasons, and risks. The backtest command prints strategy return, buy-and-hold return, annualized return, maximum drawdown, and win rate.
 
 ## Roadmap
 
-1. Technical indicators
-2. News and earnings data
-3. Backtesting
-4. Paper portfolio
-5. More asset classes
+1. Improve backtesting with transaction costs and more strategies
+2. Paper portfolio
+3. More asset classes
+4. Automated scheduled analysis
