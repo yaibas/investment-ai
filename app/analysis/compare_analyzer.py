@@ -11,7 +11,7 @@ load_dotenv()
 
 
 def compare_stocks(market_data: list[dict[str, Any]]) -> str:
-    """Compare multiple market-data records with an LLM."""
+    """Compare multiple market-data records, including technical indicators."""
     valid_data = [item for item in market_data if "error" not in item]
     if not valid_data:
         raise ValueError("比較できる市場データがありません")
@@ -32,6 +32,7 @@ def compare_stocks(market_data: list[dict[str, Any]]) -> str:
             "open": item["open"],
             "high": item["high"],
             "low": item["low"],
+            "technical": item.get("technical", {}),
         }
         for item in valid_data
     ]
@@ -39,7 +40,7 @@ def compare_stocks(market_data: list[dict[str, Any]]) -> str:
     prompt = f"""
 あなたは投資分析アシスタントです。
 
-以下の複数銘柄の市場データを比較してください。
+以下の複数銘柄の市場データとテクニカル指標を比較してください。
 
 {json.dumps(compact, ensure_ascii=False, indent=2)}
 
@@ -53,6 +54,9 @@ def compare_stocks(market_data: list[dict[str, Any]]) -> str:
 
 最も注目する銘柄:
 理由:
+
+分析では、価格変化だけでなく、SMA20/SMA50、EMA20、RSI14、MACD、
+20日ベースの年率換算ボラティリティも考慮してください。
 
 注意:
 - 数値データから考えられる材料を説明してください。
