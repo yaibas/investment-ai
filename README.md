@@ -9,6 +9,7 @@ AI-assisted investment analysis project.
 - Include recent company fundamentals and news context when available
 - Run a historical SMA-crossover backtest with configurable trading friction
 - Manage a saved paper portfolio with virtual buy/sell transactions
+- Generate AI-based paper-portfolio allocation proposals with configurable cash and single-asset limits
 - Ask an LLM to rank attention candidates and explain risks
 - Analysis only: no real-money order execution
 
@@ -79,6 +80,22 @@ Sell virtually:
 python app\paper_portfolio.py --sell 7203.T 5 3200
 ```
 
+### 7. Generate an AI allocation proposal
+
+This command analyzes the selected tickers and returns a research-only allocation proposal whose total is constrained to 100%, including the requested cash allocation and per-ticker maximum.
+
+```powershell
+python app\allocate.py 7203.T 6758.T 8306.T 9984.T
+```
+
+For example, keep 20% in cash and cap one ticker at 35%:
+
+```powershell
+python app\allocate.py 7203.T 6758.T 8306.T 9984.T --cash 20 --max-weight 35
+```
+
+The AI proposal is informational and is not an order or a guarantee of performance.
+
 ### Japanese stock ticker examples
 
 - `7203.T` — Toyota
@@ -88,11 +105,11 @@ python app\paper_portfolio.py --sell 7203.T 5 3200
 
 ## Output
 
-The analysis command prints market data, technical indicators, and an AI comparison with an attention ranking, reasons, and risks. The backtest command prints strategy return, buy-and-hold return, annualized return, maximum drawdown, win rate, and trading-event count. The paper portfolio prints cash, holdings, market value, unrealized P/L, and transaction count.
+The analysis command prints market data, technical indicators, and an AI comparison with an attention ranking, reasons, and risks. The backtest command prints strategy return, buy-and-hold return, annualized return, maximum drawdown, win rate, and trading-event count. The paper portfolio prints cash, holdings, market value, unrealized P/L, and transaction count. The allocation command prints proposed weights, reasons, a summary, and key risks.
 
 ## Roadmap
 
-1. Connect AI analysis to portfolio allocation proposals
+1. Feed allocation proposals into the paper portfolio for simulated rebalancing
 2. More robust backtesting and strategy comparison
 3. More asset classes
 4. Automated scheduled analysis
