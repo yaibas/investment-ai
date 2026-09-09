@@ -1,42 +1,9 @@
 from __future__ import annotations
 
-import json
-import os
 from typing import Any
 
-from dotenv import load_dotenv
-from openai import OpenAI
-
-load_dotenv()
-
-
-def _build_records(market_data: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    records = []
-    for item in market_data:
-        if "error" in item:
-            continue
-        fundamentals = item.get("fundamentals") or {}
-        technical = item.get("technical") or {}
-        records.append(
-            {
-                "ticker": item.get("ticker"),
-                "price": item.get("price"),
-                "change_percent": item.get("change_percent"),
-                "technical": technical,
-                "fundamentals": {
-                    "company_name": fundamentals.get("company_name"),
-                    "sector": fundamentals.get("sector"),
-                    "market_cap": fundamentals.get("market_cap"),
-                    "trailing_pe": fundamentals.get("trailing_pe"),
-                    "forward_pe": fundamentals.get("forward_pe"),
-                    "price_to_book": fundamentals.get("price_to_book"),
-                    "operating_margin_percent": fundamentals.get("operating_margin_percent"),
-                    "net_margin_percent": fundamentals.get("net_margin_percent"),
-                },
-                "news": (item.get("news") or [])[:5],
-            }
-        )
-    return records
+from analysis.explain_score import explain_score
+from data.ticker_master import display_name
 
 
 def suggest_allocation(
@@ -44,7 +11,10 @@ def suggest_allocation(
     cash_weight_percent: float = 10.0,
     max_single_weight_percent: float = 40.0,
 ) -> dict[str, Any]:
-    """Ask an LLM for an analysis-based paper-portfolio allocation suggestion."""
+    """Create a deterministic, explainable paper allocation without an API key.
+
+    The allocation is based on the existing educational score. It is not a predictive model.
+    """
     if not market_data:
         raise ValueError("分析対象データがありません")
     if not 0 <= cash_weight_percent <= 100:
@@ -52,77 +22,78 @@ def suggest_allocation(
     if not 1 <= max_single_weight_percent <= 100:
         raise ValueError("max_single_weight_percent は1〜100で指定してください")
 
-    records = _build_records(market_data)
-    if not records:
-        raise ValueError("有効な銘柄データがありません")
+    valid = [item for item in market_data if "error" not in item and item.get("ticker")]
+    if len(valid) < 2:
+        raise ValueError("有効な銘柄データが2つ以上必要です")
 
     target_total = 100.0 - cash_weight_percent
-    model = os.getenv("OPENAI_MODEL", "gpt-5.6-luna")
-    client = OpenAI()
+    ranked: list[dict[str, Any]] = []
+    for item in valid:
+        score = explain_score(item)
+        ranked.append(
+            {
+                "ticker": str(item["ticker"]).strip().upper(),
+                "score": float(score["overall_score"]),
+                "label": score["label"],
+            }
+        )
+    ranked.sort(key=lambda x: (-x["score"], x["ticker"]))
 
-    prompt = f"""
-あなたは投資分析支援AIです。以下の銘柄データだけを使って、仮想ポートフォリオの配分案を作成してください。
+    # Shift scores to positive weights so a below-average score still receives some weight,
+    # then cap and redistribute until the requested invested total is satisfied.
+    floor = 5.0
+    raw = {item["ticker"]: max(item["score"] - 35.0, floor) for item in ranked}
+    active = set(raw)
+    weights = {ticker: 0.0 for ticker in raw}
 
-重要:
-- これは過去・現在データに基づく研究用の仮想配分であり、利益を保証しない。
-- 実際の売買注文は行わない。
-- 最終的な配分は100%。現金は{cash_weight_percent:.1f}%固定、残り{target_total:.1f}%を銘柄へ配分する。
-- 1銘柄の配分上限は{max_single_weight_percent:.1f}%。
-- データが不足する銘柄には無理に高い比率を付けない。
-- PER/PBR、利益率、テクニカル、ニュース、集中リスクを総合評価する。
-- 未来の株価や収益を断定しない。
+    remaining = target_total
+    while active and remaining > 1e-9:
+        subtotal = sum(raw[ticker] for ticker in active)
+        if subtotal <= 0:
+            break
+        capped_any = False
+        for ticker in list(active):
+            proposed = remaining * raw[ticker] / subtotal
+            if proposed >= max_single_weight_percent:
+                weights[ticker] = max_single_weight_percent
+                remaining -= max_single_weight_percent
+                active.remove(ticker)
+                capped_any = True
+        if not capped_any:
+            for ticker in active:
+                weights[ticker] = remaining * raw[ticker] / subtotal
+            remaining = 0.0
 
-次のJSONだけを返してください。Markdownや説明文は不要です。
-{{
-  "portfolio": [
-    {{"ticker": "7203.T", "weight_percent": 30.0, "reason": "..."}}
-  ],
-  "cash_percent": {cash_weight_percent:.1f},
-  "summary": "全体の考え方",
-  "key_risks": ["...", "..."]
-}}
+    # Round while preserving the requested total as closely as possible.
+    rounded = {ticker: round(value, 2) for ticker, value in weights.items() if value > 0.005}
+    rounding_gap = round(target_total - sum(rounded.values()), 2)
+    if rounding_gap and rounded:
+        top_ticker = max(rounded, key=rounded.get)
+        rounded[top_ticker] = round(rounded[top_ticker] + rounding_gap, 2)
 
-銘柄データ:
-{json.dumps(records, ensure_ascii=False)}
-"""
-
-    response = client.responses.create(model=model, input=prompt)
-    text = response.output_text.strip()
-    result = json.loads(text)
-
-    portfolio = result.get("portfolio") or []
-    normalized = []
-    for item in portfolio:
-        ticker = str(item.get("ticker", "")).strip().upper()
-        try:
-            weight = float(item.get("weight_percent", 0))
-        except (TypeError, ValueError):
+    portfolio = []
+    for item in ranked:
+        ticker = item["ticker"]
+        weight = rounded.get(ticker, 0.0)
+        if weight <= 0:
             continue
-        weight = max(0.0, min(weight, max_single_weight_percent))
-        if ticker and weight > 0:
-            normalized.append(
-                {
-                    "ticker": ticker,
-                    "weight_percent": round(weight, 2),
-                    "reason": str(item.get("reason", "")),
-                }
-            )
-
-    total = sum(item["weight_percent"] for item in normalized)
-    tolerance = 0.05
-    if abs(total - target_total) > tolerance:
-        raise ValueError(
-            f"AI配分の合計が不正です: 銘柄={total:.2f}%, 目標={target_total:.2f}%"
+        portfolio.append(
+            {
+                "ticker": ticker,
+                "weight_percent": weight,
+                "reason": f"{display_name(ticker)}の説明用スコアが{item['score']:.1f}点で、候補内の相対的な評価が高い順に配分。",
+            }
         )
 
-    cash = float(result.get("cash_percent", cash_weight_percent))
-    if abs(cash - cash_weight_percent) > tolerance:
-        raise ValueError("AIが指定した現金比率が設定値と一致しません")
-
+    total = round(sum(item["weight_percent"] for item in portfolio) + cash_weight_percent, 2)
+    key_risks = [
+        "これは価格・企業データなどを単純なルールで点数化した研究用の配分です。",
+        "同じ業種や値動きの似た銘柄に集中すると、同時に下落する可能性があります。",
+    ]
     return {
-        "portfolio": normalized,
+        "portfolio": portfolio,
         "cash_percent": round(cash_weight_percent, 2),
-        "total_percent": round(total + cash_weight_percent, 2),
-        "summary": str(result.get("summary", "")),
-        "key_risks": result.get("key_risks") or [],
+        "total_percent": total,
+        "summary": "候補銘柄の説明用スコアを相対比較し、上限を守りながら高い銘柄にやや厚く配分したローカル自動配分です。",
+        "key_risks": key_risks,
     }
