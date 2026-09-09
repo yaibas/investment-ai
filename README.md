@@ -8,6 +8,7 @@ AI-assisted investment analysis project.
 - Calculate technical indicators such as SMA, EMA, RSI, MACD, and volatility
 - Include recent company fundamentals and news context when available
 - Run a historical SMA-crossover backtest with configurable trading friction
+- Manage a saved paper portfolio with virtual buy/sell transactions
 - Ask an LLM to rank attention candidates and explain risks
 - Analysis only: no real-money order execution
 
@@ -50,16 +51,32 @@ python app\run_analysis.py 7203.T 6758.T --period 3mo
 
 ### 5. Run a backtest
 
-The current backtest is a simple long-only SMA crossover strategy. It shifts signals by one day to reduce look-ahead bias and can model configurable transaction costs and slippage. It is for historical research only and does not model taxes, market impact, liquidity limits, dividends, or corporate actions beyond what the downloaded price history represents.
+The backtest is a long-only SMA crossover strategy. It shifts signals by one day to reduce look-ahead bias and can model configurable transaction costs and slippage. It is for historical research only and does not model taxes, market impact, liquidity limits, dividends, or all corporate actions.
 
 ```powershell
 python app\backtest.py 7203.T --period 5y
 ```
 
-Defaults are 10 bps transaction cost plus 5 bps slippage per position change. You can override them:
+### 6. Run a paper portfolio
+
+The paper portfolio uses virtual transactions only. The state is saved in `paper_portfolio.json` by default.
+
+Create a virtual position:
 
 ```powershell
-python app\backtest.py 7203.T --period 10y --fast 20 --slow 50 --cost-bps 10 --slippage-bps 5
+python app\paper_portfolio.py --cash 1000000 --buy 7203.T 10 3000
+```
+
+Refresh the valuation using the latest downloaded price:
+
+```powershell
+python app\paper_portfolio.py --quote 7203.T
+```
+
+Sell virtually:
+
+```powershell
+python app\paper_portfolio.py --sell 7203.T 5 3200
 ```
 
 ### Japanese stock ticker examples
@@ -71,11 +88,11 @@ python app\backtest.py 7203.T --period 10y --fast 20 --slow 50 --cost-bps 10 --s
 
 ## Output
 
-The analysis command prints market data, technical indicators, and an AI comparison with an attention ranking, reasons, and risks. The backtest command prints strategy return, buy-and-hold return, annualized return, maximum drawdown, win rate, and trading-event count.
+The analysis command prints market data, technical indicators, and an AI comparison with an attention ranking, reasons, and risks. The backtest command prints strategy return, buy-and-hold return, annualized return, maximum drawdown, win rate, and trading-event count. The paper portfolio prints cash, holdings, market value, unrealized P/L, and transaction count.
 
 ## Roadmap
 
-1. Paper portfolio
+1. Connect AI analysis to portfolio allocation proposals
 2. More robust backtesting and strategy comparison
 3. More asset classes
 4. Automated scheduled analysis
