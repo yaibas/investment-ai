@@ -5,6 +5,8 @@ from typing import Any
 
 import yfinance as yf
 
+from risk_metrics import calculate_risk_metrics
+
 
 def download_history(ticker: str, period: str = "5y"):
     ticker = ticker.strip().upper()
@@ -74,6 +76,7 @@ def sma_crossover_backtest(
     annualized_return = (
         float(equity.iloc[-1] ** (1 / years) - 1) if years > 0 else 0.0
     )
+    risk = calculate_risk_metrics(net_strategy_return)
 
     return {
         "start": equity.index[0].strftime("%Y-%m-%d"),
@@ -82,6 +85,10 @@ def sma_crossover_backtest(
         "benchmark_buy_hold_return_percent": round(benchmark_return * 100, 2),
         "annualized_return_percent": round(annualized_return * 100, 2),
         "max_drawdown_percent": round(max_drawdown * 100, 2),
+        "annualized_volatility_percent": risk["annualized_volatility_percent"],
+        "sharpe_ratio": risk["sharpe_ratio"],
+        "sortino_ratio": risk["sortino_ratio"],
+        "positive_day_rate_percent": risk["positive_day_rate_percent"],
         "win_rate_percent": round(win_rate * 100, 2),
         "trade_events": trade_events,
         "transaction_cost_bps": transaction_cost_bps,
@@ -129,6 +136,9 @@ def main() -> None:
     print(f"買い持ち: {result['benchmark_buy_hold_return_percent']}%")
     print(f"年率リターン: {result['annualized_return_percent']}%")
     print(f"最大ドローダウン: {result['max_drawdown_percent']}%")
+    print(f"年率ボラティリティ: {result['annualized_volatility_percent']}%")
+    print(f"シャープレシオ: {result['sharpe_ratio']}")
+    print(f"ソルティノレシオ: {result['sortino_ratio']}")
     print(f"勝率: {result['win_rate_percent']}%")
     print(f"売買イベント数: {result['trade_events']}")
     print(

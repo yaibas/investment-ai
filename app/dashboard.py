@@ -118,8 +118,13 @@ with test_tab:
             c1.metric("未知の期間での累積成績", f"{wf['out_of_sample_return_percent']:.2f}%")
             c2.metric("年率換算", f"{wf['out_of_sample_annualized_return_percent']:.2f}%")
             c3.metric("最大の下落", f"{wf['out_of_sample_max_drawdown_percent']:.2f}%")
+            c4, c5, c6 = st.columns(3)
+            c4.metric("値動きの大きさ", f"{wf['out_of_sample_annualized_volatility_percent']:.2f}%")
+            c5.metric("効率スコア", f"{wf['out_of_sample_sharpe_ratio'] if wf['out_of_sample_sharpe_ratio'] is not None else '—'}")
+            c6.metric("下落だけで見た効率", f"{wf['out_of_sample_sortino_ratio'] if wf['out_of_sample_sortino_ratio'] is not None else '—'}")
             st.caption(f"同じテスト期間で『買ってそのまま持つ』場合: {wf['out_of_sample_buy_hold_return_percent']:.2f}%")
             st.dataframe(pd.DataFrame(wf["periods"]), use_container_width=True, hide_index=True)
+            st.info("見方: 年率リターンは年間ペースの成績、値動きの大きさは成績のブレ、最大の下落はピークからの最大下落です。効率スコア（シャープ）は『リスクに対してどれくらい成績が出たか』、下落だけで見た効率（ソルティノ）は『下落リスクを重く見た効率』の目安です。数字が高いほど一概に優秀とは限りません。")
         except Exception as exc:
             st.error(f"エラー: {exc}")
 
@@ -132,6 +137,9 @@ with terms_tab:
         ("AI分析", "価格だけでなく、会社情報やニュースなども材料にして比較すること。"),
         ("ウォークフォワード検証", "過去だけで方法を選び、その後の『まだ見ていない期間』で試すこと。過去に合わせすぎていないかを見るために使う。"),
         ("スリッページ", "注文した価格と、実際に成立すると仮定した価格のズレ。テストでは少し不利な条件として入れる。"),
+        ("ボラティリティ", "値動きの大きさ。大きいほど、成績がブレやすいと考える。"),
+        ("シャープレシオ", "リスクに対してどれくらいリターンが出たかを見る目安。高いほど効率が良い傾向。"),
+        ("ソルティノレシオ", "特に下落方向のブレを重く見て、成績の効率を確認する目安。"),
     ]
     for name, explanation in terms:
         with st.expander(name):
