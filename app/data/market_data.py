@@ -4,9 +4,11 @@ from typing import Any
 
 import yfinance as yf
 
+from analysis.technical import summarize_technical_indicators
 
-def get_market_data(ticker: str, period: str = "1mo") -> dict[str, Any]:
-    """Fetch recent market data for one ticker from Yahoo Finance via yfinance."""
+
+def get_market_data(ticker: str, period: str = "6mo") -> dict[str, Any]:
+    """Fetch recent market data and technical indicators via yfinance."""
     ticker = ticker.strip().upper()
     if not ticker:
         raise ValueError("ticker が空です")
@@ -40,5 +42,5 @@ def get_market_data(ticker: str, period: str = "1mo") -> dict[str, Any]:
         "open": round(float(latest["Open"]), 2),
         "high": round(float(latest["High"]), 2),
         "low": round(float(latest["Low"]), 2),
-        "history": history,
+        "technical": summarize_technical_indicators(history),
     }
