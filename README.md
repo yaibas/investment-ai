@@ -7,7 +7,7 @@ AI-assisted investment analysis project.
 - Compare multiple tickers in one run
 - Calculate technical indicators such as SMA, EMA, RSI, MACD, and volatility
 - Include recent company fundamentals and news context when available
-- Run a historical SMA-crossover backtest
+- Run a historical SMA-crossover backtest with configurable trading friction
 - Ask an LLM to rank attention candidates and explain risks
 - Analysis only: no real-money order execution
 
@@ -50,16 +50,16 @@ python app\run_analysis.py 7203.T 6758.T --period 3mo
 
 ### 5. Run a backtest
 
-The current backtest is a simple long-only SMA crossover strategy. It is for historical research only; transaction costs, taxes, slippage, and other real-world effects are not modeled yet.
+The current backtest is a simple long-only SMA crossover strategy. It shifts signals by one day to reduce look-ahead bias and can model configurable transaction costs and slippage. It is for historical research only and does not model taxes, market impact, liquidity limits, dividends, or corporate actions beyond what the downloaded price history represents.
 
 ```powershell
 python app\backtest.py 7203.T --period 5y
 ```
 
-You can change the fast and slow moving-average windows:
+Defaults are 10 bps transaction cost plus 5 bps slippage per position change. You can override them:
 
 ```powershell
-python app\backtest.py 7203.T --period 10y --fast 20 --slow 50
+python app\backtest.py 7203.T --period 10y --fast 20 --slow 50 --cost-bps 10 --slippage-bps 5
 ```
 
 ### Japanese stock ticker examples
@@ -71,11 +71,11 @@ python app\backtest.py 7203.T --period 10y --fast 20 --slow 50
 
 ## Output
 
-The analysis command prints market data, technical indicators, and an AI comparison with an attention ranking, reasons, and risks. The backtest command prints strategy return, buy-and-hold return, annualized return, maximum drawdown, and win rate.
+The analysis command prints market data, technical indicators, and an AI comparison with an attention ranking, reasons, and risks. The backtest command prints strategy return, buy-and-hold return, annualized return, maximum drawdown, win rate, and trading-event count.
 
 ## Roadmap
 
-1. Improve backtesting with transaction costs and more strategies
-2. Paper portfolio
+1. Paper portfolio
+2. More robust backtesting and strategy comparison
 3. More asset classes
 4. Automated scheduled analysis
