@@ -16,6 +16,8 @@ AI-assisted investment analysis project.
 - Generate AI-based paper-portfolio allocation proposals with configurable cash and single-asset limits
 - Apply an allocation proposal to the saved paper portfolio through virtual rebalancing
 - Record paper-portfolio valuation history and calculate cumulative return and maximum drawdown
+- Run a multi-asset portfolio backtest with daily/monthly rebalancing, cash, trading costs, and risk metrics
+- Let AI propose a constrained multi-asset allocation and run a historical price sensitivity check for that exact mix
 - Provide a beginner-friendly Streamlit dashboard
 - Explain analysis scores and the evidence behind them
 - Ask an LLM to rank attention candidates and explain risks
@@ -29,7 +31,7 @@ After installing dependencies, start the dashboard with:
 streamlit run app\dashboard.py
 ```
 
-The dashboard lets you enter ticker codes, run AI comparisons, test strategies on historical data, see risk metrics, and open a built-in glossary for difficult terms.
+The dashboard lets you enter ticker codes, run AI comparisons, ask AI for a portfolio allocation, check that allocation against historical prices, test strategies on historical data, see risk metrics, and open a built-in glossary for difficult terms.
 
 ## Quick start (Windows)
 
@@ -68,7 +70,7 @@ python app\run_analysis.py 7203.T 6758.T 9984.T 8306.T
 python app\backtest.py 7203.T --period 5y --fast 20 --slow 50
 ```
 
-The result now includes both performance and risk information, such as annualized volatility, Sharpe ratio, and Sortino ratio.
+The result includes both performance and risk information, such as annualized volatility, Sharpe ratio, and Sortino ratio.
 
 ### 6. Run a multi-ticker × multi-strategy backtest
 
@@ -106,7 +108,15 @@ python app\rebalance.py 7203.T 6758.T 8306.T 9984.T --cash 20 --max-weight 35
 
 This analyzes the selected tickers, proposes constrained research weights, and applies them to `paper_portfolio.json` through virtual trades only.
 
-### 9. Record portfolio performance history
+### 9. Check an AI allocation against historical prices
+
+The dashboard's **AIポートフォリオ** tab can create an allocation and check that exact mix against up to 10 years of historical prices. You can control the cash reserve, maximum single-asset weight, and rebalance frequency.
+
+For scripting, the same workflow is available through `app/ai_portfolio_backtest.py`, which combines the existing AI allocator with `app/portfolio_backtest.py`.
+
+Important: this is a **historical sensitivity check**, not proof that the AI could have made the same decision in the past. The current AI allocation may use information that was unavailable during the historical period, so it must not be described as a true point-in-time or out-of-sample strategy backtest.
+
+### 10. Record portfolio performance history
 
 After a paper portfolio exists, record today's valuation:
 
@@ -133,6 +143,7 @@ History is stored in `portfolio_history.json` by default. Re-running `--record` 
 - **スリッページ**: 注文したい価格と、実際に成立すると仮定した価格のズレ。
 - **ウォークフォワード検証**: 過去だけで方法を選び、その後のまだ使っていないデータで検証すること。
 - **ペーパー運用**: 実際のお金を使わず、仮想のお金で運用を試すこと。
+- **AIポートフォリオ検証**: AIが候補銘柄の配分を考え、その現在の配分を過去価格に当てはめて動きを確認すること。厳密な過去時点のAI判断を再現するものではない。
 
 ## Safety and scope
 
