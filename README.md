@@ -4,6 +4,7 @@ AI-assisted investment analysis project.
 
 ## Current scope
 - Fetch market data with `yfinance`
+- Optionally connect to a realtime-capable TSE market-data API for live quotes/candles
 - Select common Japanese stocks by company name in the dashboard
 - Compare multiple stocks with an explainable local rule-based analyzer
 - Calculate technical indicators such as SMA, EMA, RSI, MACD, and volatility
@@ -21,7 +22,24 @@ AI-assisted investment analysis project.
 
 ## Important: no OpenAI API key is required
 
-The current dashboard does not call OpenAI or another LLM. The comparison and portfolio allocation screens use deterministic, explainable local rules based on the market data the app retrieves. This keeps the app usable without an API key or API credit.
+The current dashboard does not call OpenAI or another LLM. The comparison and portfolio allocation screens use deterministic, explainable local rules based on the market data the app retrieves. This keeps the app usable without an OpenAI API key or OpenAI API credit.
+
+## Realtime market-data mode
+
+The dashboard can optionally use a realtime-capable TSE market-data provider instead of the default `yfinance` source for the intraday simulator. The provider adapter uses authenticated HTTP market-data endpoints and is kept separate from the virtual trading logic.
+
+Set the provider token in the environment as `KUN_DATA_TOKEN` before starting Streamlit. For a PowerShell session:
+
+```powershell
+$env:KUN_DATA_TOKEN="YOUR_TOKEN"
+streamlit run app\dashboard.py
+```
+
+When `KUN_DATA_TOKEN` is present, the intraday simulator shows **🟢 リアルタイムデータ接続中** and uses the provider's TSE realtime-capable market data. When it is absent, the app automatically falls back to `yfinance` and shows **🟡 Yahoo Financeモード**.
+
+The external provider may require an account, authorization, and/or paid market-data access. Do not commit your token to GitHub.
+
+For exchange-grade real-time market data, licensing and contracts may be required depending on the provider and intended use.
 
 ## Beginner-friendly dashboard (Windows)
 
@@ -54,7 +72,7 @@ pip install -r requirements.txt
 streamlit run app\dashboard.py
 ```
 
-No API key setup is required.
+No OpenAI API key setup is required. Realtime mode additionally requires a market-data provider token.
 
 ## Virtual diamond simulation
 

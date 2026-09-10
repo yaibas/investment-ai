@@ -1,0 +1,1 @@
+Realtime mode is optional. Set KUN_DATA_TOKEN locally; never commit credentials. Without it, the intraday simulator falls back to yfinance. The app remains virtual-trading only.
