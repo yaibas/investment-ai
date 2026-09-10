@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -20,6 +21,7 @@ from diamond_portfolio import (
     save_diamond_portfolio,
 )
 from intraday import INTERVALS, add_intraday_indicators, fetch_intraday_history, intraday_summary
+from realtime_market import fetch_realtime_history, fetch_realtime_snapshot, realtime_enabled
 
 
 st.set_page_config(page_title="デイトレ・シミュレーター", page_icon="📊", layout="wide")
@@ -41,6 +43,44 @@ def load_game() -> DiamondPortfolio:
     return portfolio
 
 
+def realtime_interval(interval: str) -> str:
+    return {
+        "1m": "1",
+        "2m": "1",
+        "5m": "5",
+        "15m": "15",
+        "30m": "15",
+        "60m": "60",
+    }.get(interval, "1")
+
+
+def load_market_data(ticker: str, interval: str, period: str) -> tuple[pd.DataFrame, dict, str]:
+    if realtime_enabled():
+        count = 400 if interval in ("1m", "2m", "5m", "15m") else 250
+        data = fetch_realtime_history(ticker, interval=realtime_interval(interval), count=count)
+        if interval == "2m":
+            data = data.resample("2min", label="left", closed="left").agg(
+                {"Open": "first", "High": "max", "Low": "min", "Close": "last", "Volume": "sum"}
+            ).dropna(subset=["Open", "High", "Low", "Close"])
+        elif interval == "30m":
+            data = data.resample("30min", label="left", closed="left").agg(
+                {"Open": "first", "High": "max", "Low": "min", "Close": "last", "Volume": "sum"}
+            ).dropna(subset=["Open", "High", "Low", "Close"])
+        if period == "1d":
+            cutoff = data.index[-1].normalize()
+            data = data[data.index >= cutoff]
+        elif period == "5d":
+            data = data[data.index >= data.index[-1] - pd.Timedelta(days=5)]
+        elif period == "7d":
+            data = data[data.index >= data.index[-1] - pd.Timedelta(days=7)]
+        summary = intraday_summary(add_intraday_indicators(data))
+        return data, summary, "リアルタイム市場データ"
+
+    history = fetch_intraday_history(ticker, interval=interval, period=period)
+    data = add_intraday_indicators(history)
+    return data, intraday_summary(data), "Yahoo Finance（遅延する場合があります）"
+
+
 portfolio = load_game()
 
 with st.sidebar:
@@ -59,21 +99,26 @@ with st.sidebar:
     period = st.selectbox("表示期間", period_options, index=0)
     refresh_seconds = st.select_slider(
         "自動更新",
-        options=[5, 10, 15, 30, 60],
-        value=10,
+        options=[1, 2, 5, 10, 15, 30, 60],
+        value=2 if realtime_enabled() else 10,
         format_func=lambda x: f"{x}秒ごと",
     )
 
     st.divider()
     st.metric("💎 ダイヤ", f"{portfolio.diamonds:,.0f}")
-    st.caption("Yahoo Finance経由のデータです。取引所の完全なリアルタイム配信を保証するものではありません。")
+    if realtime_enabled():
+        st.success("🟢 リアルタイムデータ接続中")
+        st.caption("TSE対応のリアルタイム市場データAPIを使用しています。")
+    else:
+        st.warning("🟡 Yahoo Financeモード")
+        st.caption("KUN_DATA_TOKENを設定すると、リアルタイム市場データAPIへ切り替えられます。")
 
 
 @st.fragment(run_every=refresh_seconds)
 def show_market():
     try:
-        history = fetch_intraday_history(ticker, interval=interval, period=period)
-        data = add_intraday_indicators(history)
+        data, summary, source = load_market_data(ticker, interval, period)
+        data = add_intraday_indicators(data)
         summary = intraday_summary(data)
     except Exception as exc:
         st.error(f"株価データを取得できませんでした: {exc}")
@@ -97,22 +142,8 @@ def show_market():
             name="ローソク足",
         )
     )
-    chart.add_trace(
-        go.Scatter(
-            x=data.index,
-            y=data["EMA9"],
-            mode="lines",
-            name="EMA9",
-        )
-    )
-    chart.add_trace(
-        go.Scatter(
-            x=data.index,
-            y=data["EMA20"],
-            mode="lines",
-            name="EMA20",
-        )
-    )
+    chart.add_trace(go.Scatter(x=data.index, y=data["EMA9"], mode="lines", name="EMA9"))
+    chart.add_trace(go.Scatter(x=data.index, y=data["EMA20"], mode="lines", name="EMA20"))
     chart.update_layout(
         height=500,
         margin=dict(l=10, r=10, t=30, b=10),
@@ -123,13 +154,7 @@ def show_market():
     )
     st.plotly_chart(chart, use_container_width=True, config={"displaylogo": False})
 
-    volume_chart = go.Figure(
-        go.Bar(
-            x=data.index,
-            y=data["Volume"],
-            name="出来高",
-        )
-    )
+    volume_chart = go.Figure(go.Bar(x=data.index, y=data["Volume"], name="出来高"))
     volume_chart.update_layout(
         height=220,
         margin=dict(l=10, r=10, t=30, b=10),
@@ -147,12 +172,18 @@ def show_market():
     c6.metric("EMA20", f"{float(ema20):,.2f}" if pd.notna(ema20) else "—")
     c7.metric("RSI14", f"{float(rsi):.1f}" if pd.notna(rsi) else "—")
 
-    st.caption(f"最新データ時刻: {summary['timestamp']}")
-
-    st.info(
-        "この画面は仮想売買の練習用です。ローソク足チャートで価格の値動きを表示しています。"
-        "自動売買や実際の注文は行いません。"
-    )
+    st.caption(f"データソース: {source} / 最新データ時刻: {summary['timestamp']}")
+    if realtime_enabled():
+        st.info(
+            "🟢 リアルタイム市場データを使用しています。価格更新はデータ提供元の配信状況に依存します。"
+            "この画面は仮想売買の練習用で、自動売買や実際の注文は行いません。"
+        )
+    else:
+        st.info(
+            "🟡 現在はYahoo Financeのデータです。完全なリアルタイム表示にするには、"
+            "リアルタイム市場データAPIの認証情報が必要です。"
+            "この画面は仮想売買の練習用で、自動売買や実際の注文は行いません。"
+        )
 
 
 show_market()
@@ -161,8 +192,13 @@ st.divider()
 st.subheader("💎 仮想売買")
 
 try:
-    quotes = fetch_latest_prices([ticker])
-    latest_price = quotes[ticker]
+    if realtime_enabled():
+        live_quote = fetch_realtime_snapshot(ticker)
+        latest_price = float(live_quote["price"])
+        quotes = {ticker: latest_price}
+    else:
+        quotes = fetch_latest_prices([ticker])
+        latest_price = quotes[ticker]
 except Exception as exc:
     quotes = {}
     latest_price = None
