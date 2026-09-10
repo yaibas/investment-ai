@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 import pandas as pd
@@ -18,10 +18,7 @@ def realtime_enabled() -> bool:
 def _headers() -> dict[str, str]:
     if not KUN_DATA_TOKEN:
         raise RuntimeError("KUN_DATA_TOKEN が設定されていません")
-    return {
-        "Authorization": f"Bearer {KUN_DATA_TOKEN}",
-        "Accept": "application/json",
-    }
+    return {"Authorization": f"Bearer {KUN_DATA_TOKEN}", "Accept": "application/json"}
 
 
 def _request(path: str, params: dict[str, Any]) -> dict[str, Any]:
@@ -34,7 +31,7 @@ def _request(path: str, params: dict[str, Any]) -> dict[str, Any]:
     response.raise_for_status()
     payload = response.json()
     if payload.get("code") not in (None, 200):
-        raise RuntimeError(payload.get("msg") or "リアルタイムデータAPIからエラーが返されました")
+        raise RuntimeError(payload.get("msg") or "市場データAPIからエラーが返されました")
     return payload
 
 
@@ -44,14 +41,9 @@ def _symbol(ticker: str) -> str:
 
 
 def fetch_realtime_snapshot(ticker: str) -> dict[str, Any]:
-    """Fetch the latest TSE quote snapshot for one ticker."""
     payload = _request(
         "exchange",
-        {
-            "market": "JP",
-            "venue": "TSE",
-            "symbol": _symbol(ticker),
-        },
+        {"market": "JP", "venue": "TSE", "symbol": _symbol(ticker)},
     )
     items = payload.get("list") or []
     if not items:
@@ -74,30 +66,24 @@ def fetch_realtime_snapshot(ticker: str) -> dict[str, Any]:
 
 
 def fetch_realtime_history(ticker: str, interval: str = "1", count: int = 200) -> pd.DataFrame:
-    """Fetch current/recent OHLCV candles from the realtime-capable provider."""
     payload = _request(
         "history",
-        {
-            "market": "JP",
-            "symbol": _symbol(ticker),
-            "interval": interval,
-            "count": count,
-        },
+        {"market": "JP", "symbol": _symbol(ticker), "interval": interval, "count": count},
     )
     rows = payload.get("list") or []
     if not rows:
         raise ValueError(f"ローソク足データを取得できませんでした: {ticker}")
 
-    frame = pd.DataFrame(rows)
-    rename_map = {
-        "timestamp": "Timestamp",
-        "open": "Open",
-        "high": "High",
-        "low": "Low",
-        "close": "Close",
-        "volume": "Volume",
-    }
-    frame = frame.rename(columns=rename_map)
+    frame = pd.DataFrame(rows).rename(
+        columns={
+            "timestamp": "Timestamp",
+            "open": "Open",
+            "high": "High",
+            "low": "Low",
+            "close": "Close",
+            "volume": "Volume",
+        }
+    )
     required = ["Open", "High", "Low", "Close", "Volume", "Timestamp"]
     missing = [column for column in required if column not in frame.columns]
     if missing:
@@ -113,7 +99,7 @@ def _timestamp_text(value: Any) -> str:
     if value is None:
         return "不明"
     try:
-        dt = datetime.fromtimestamp(float(value)).astimezone()
+        dt = datetime.fromtimestamp(float(value), tz=timezone.utc).astimezone()
         return dt.strftime("%Y-%m-%d %H:%M:%S %Z")
     except (TypeError, ValueError, OSError):
         return str(value)
